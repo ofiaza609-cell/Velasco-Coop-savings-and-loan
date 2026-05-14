@@ -1,1 +1,347 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coop Savings & Loans</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* {margin:0; padding:0; box-sizing:border-box; font-family:'Poppins', sans-serif;}
+body {background:#f5f5f5; padding:16px;}
+h2 {color:#333; margin-bottom:12px;}
+.card {
+  background:white;
+  padding:14px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
+  margin-bottom:16px;
+}
+.total-box {
+  background:#ff6b35;
+  color:white;
+  padding:16px;
+  border-radius:10px;
+  text-align:center;
+  font-size:18px;
+  font-weight:700;
+}
+.member-list {display:grid; gap:10px;}
+.member {
+  background:white;
+  padding:12px;
+  border-radius:10px;
+  cursor:pointer;
+  box-shadow:0 2px 5px rgba(0,0,0,0.06);
+}
+.member:hover {background:#fff3ef;}
+.member-name {font-weight:600;}
+.member-info {display:flex; justify-content:space-between; margin-top:6px; font-size:13px;}
+.savings {color:#28a745; font-weight:700;}
+.loan {color:#dc3545; font-weight:700;}
+button {
+  background:#ff6b35;
+  color:white;
+  border:none;
+  padding:10px 16px;
+  border-radius:8px;
+  font-weight:600;
+  cursor:pointer;
+  width:100%;
+  margin-top:8px;
+}
+.btn-save {background:#28a745;}
+.btn-loan {background:#dc3545;}
+.btn-pay {background:#007bff;}
+input {
+  width:100%;
+  padding:10px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  margin:6px 0;
+  font-size:15px;
+}
+.modal {
+  display:none;
+  position:fixed;
+  top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.5);
+  justify-content:center;
+  align-items:center;
+  z-index:100;
+}
+.modal-content {
+  background:white;
+  padding:20px;
+  border-radius:12px;
+  width:90%;
+  max-width:400px;
+  max-height:80vh;
+  overflow-y:auto;
+}
+.history-item {
+  border-bottom:1px dashed #ddd;
+  padding:8px 0;
+  display:flex;
+  justify-content:space-between;
+}
+.close {float:right; cursor:pointer; font-size:22px;}
+.tab {display:flex; gap:8px; margin-bottom:12px;}
+.tab button {background:#ddd; color:#333;}
+.tab button.active {background:#ff6b35; color:white;}
+.empty {text-align:center; color:#999; padding:20px;}
+</style>
+</head>
+<body>
+
+<h2>🏦 Coop Savings & Loans</h2>
+
+<div class="card total-box">
+  Net Funds: ₱<span id="grandTotal">0</span><br>
+  <small>Savings - Loans</small>
+</div>
+
+<div class="card">
+  <h3>Add Member</h3>
+  <input type="text" id="newMember" placeholder="Enter member name">
+  <button onclick="addMember()">Add Member</button>
+</div>
+
+<div class="member-list" id="memberList"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal()">×</span>
+    <h3 id="modalName"></h3>
+
+    <div class="tab">
+      <button id="tabSave" class="active" onclick="switchTab('save')">Hulog</button>
+      <button id="tabLoan" onclick="switchTab('loan')">Utang</button>
+      <button id="tabPay" onclick="switchTab('pay')">Bayad</button>
+    </div>
+
+    <div id="saveTab">
+      <input type="number" id="saveAmount" placeholder="Enter amount">
+      <button class="btn-save" onclick="addSaving()">Add Saving</button>
+    </div>
+
+    <div id="loanTab" style="display:none;">
+      <input type="number" id="loanAmount" placeholder="Enter loan amount">
+      <button class="btn-loan" onclick="addLoan()">Add Loan</button>
+    </div>
+
+    <div id="payTab" style="display:none;">
+      <input type="number" id="payAmount" placeholder="Enter payment">
+      <button class="btn-pay" onclick="addPayment()">Pay Loan</button>
+    </div>
+
+    <h4 style="margin-top:12px;">History</h4>
+    <div id="historyList"></div>
+
+    <h4 style="margin-top:12px;">
+      Savings: ₱<span id="memberSave">0</span><br>
+      Loan: ₱<span id="memberLoan">0</span><br>
+      Balance: ₱<span id="memberBalance">0</span>
+    </h4>
+  </div>
+</div>
+
+<script>
+let currentMember = '';
+
+function loadData() {
+  return JSON.parse(localStorage.getItem('coopData') || '{"members":{}}');
+}
+
+function saveData(data) {
+  localStorage.setItem('coopData', JSON.stringify(data));
+}
+
+function addMember() {
+  let name = document.getElementById('newMember').value.trim();
+  if (!name) return alert('Enter name!');
+
+  let data = loadData();
+  let key = name.toLowerCase();
+
+  // Check if exists, ignore case and spaces
+  let existingKey = Object.keys(data.members).find(k => k.toLowerCase() === key);
+
+  if (existingKey) {
+    alert('Member already exists! Opening ' + existingKey);
+    openMember(existingKey);
+    return;
+  }
+
+  data.members[name] = {savings: [], loans: [], payments: []};
+  saveData(data);
+  document.getElementById('newMember').value = '';
+  renderMembers();
+  openMember(name);
+}
+
+function renderMembers() {
+  let data = loadData();
+  let list = document.getElementById('memberList');
+  list.innerHTML = '';
+  let netTotal = 0;
+
+  let memberNames = Object.keys(data.members);
+
+  if (memberNames.length === 0) {
+    list.innerHTML = '<div class="empty">No members yet. Add one above!</div>';
+    document.getElementById('grandTotal').textContent = 0;
+    return;
+  }
+
+  for (let name of memberNames) {
+    let m = data.members[name];
+    let saveTotal = (m.savings || []).reduce((sum, h) => sum + h.amount, 0);
+    let loanTotal = (m.loans || []).reduce((sum, h) => sum + h.amount, 0);
+    let payTotal = (m.payments || []).reduce((sum, h) => sum + h.amount, 0);
+    let balance = saveTotal - (loanTotal - payTotal);
+    netTotal += balance;
+
+    list.innerHTML += `
+      <div class="member" onclick="openMember('${name}')">
+        <div class="member-name">${name}</div>
+        <div class="member-info">
+          <span class="savings">Save: ₱${saveTotal}</span>
+          <span class="loan">Loan: ₱${loanTotal - payTotal}</span>
+          <span>Balance: ₱${balance}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('grandTotal').textContent = netTotal;
+}
+
+function openMember(name) {
+  currentMember = name;
+  document.getElementById('modalName').textContent = name;
+  document.getElementById('modal').style.display = 'flex';
+  switchTab('save');
+  renderHistory();
+}
+
+function switchTab(tab) {
+  document.getElementById('tabSave').classList.remove('active');
+  document.getElementById('tabLoan').classList.remove('active');
+  document.getElementById('tabPay').classList.remove('active');
+  document.getElementById('saveTab').style.display = 'none';
+  document.getElementById('loanTab').style.display = 'none';
+  document.getElementById('payTab').style.display = 'none';
+
+  if (tab == 'save') {
+    document.getElementById('tabSave').classList.add('active');
+    document.getElementById('saveTab').style.display = 'block';
+  }
+  if (tab == 'loan') {
+    document.getElementById('tabLoan').classList.add('active');
+    document.getElementById('loanTab').style.display = 'block';
+  }
+  if (tab == 'pay') {
+    document.getElementById('tabPay').classList.add('active');
+    document.getElementById('payTab').style.display = 'block';
+  }
+}
+
+function addSaving() {
+  let amount = parseFloat(document.getElementById('saveAmount').value);
+  if (!amount || amount <= 0) return alert('Enter valid amount!');
+
+  let data = loadData();
+  data.members[currentMember].savings.push({
+    amount: amount,
+    date: new Date().toLocaleString()
+  });
+
+  saveData(data);
+  document.getElementById('saveAmount').value = '';
+  renderHistory();
+  renderMembers();
+}
+
+function addLoan() {
+  let amount = parseFloat(document.getElementById('loanAmount').value);
+  if (!amount || amount <= 0) return alert('Enter valid amount!');
+
+  let data = loadData();
+  data.members[currentMember].loans.push({
+    amount: amount,
+    date: new Date().toLocaleString()
+  });
+
+  saveData(data);
+  document.getElementById('loanAmount').value = '';
+  renderHistory();
+  renderMembers();
+}
+
+function addPayment() {
+  let amount = parseFloat(document.getElementById('payAmount').value);
+  if (!amount || amount <= 0) return alert('Enter valid amount!');
+
+  let data = loadData();
+  let m = data.members[currentMember];
+  let loanTotal = (m.loans || []).reduce((sum, h) => sum + h.amount, 0);
+  let payTotal = (m.payments || []).reduce((sum, h) => sum + h.amount, 0);
+  let currentLoan = loanTotal - payTotal;
+
+  if (amount > currentLoan) return alert('Payment exceeds loan amount!');
+
+  data.members[currentMember].payments.push({
+    amount: amount,
+    date: new Date().toLocaleString()
+  });
+
+  saveData(data);
+  document.getElementById('payAmount').value = '';
+  renderHistory();
+  renderMembers();
+}
+
+function renderHistory() {
+  let data = loadData();
+  let m = data.members[currentMember];
+
+  let allHistory = [
+   ...(m.savings || []).map(h => ({...h, type:'Saving'})),
+   ...(m.loans || []).map(h => ({...h, type:'Loan'})),
+   ...(m.payments || []).map(h => ({...h, type:'Payment'}))
+  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  let saveTotal = (m.savings || []).reduce((sum, h) => sum + h.amount, 0);
+  let loanTotal = (m.loans || []).reduce((sum, h) => sum + h.amount, 0);
+  let payTotal = (m.payments || []).reduce((sum, h) => sum + h.amount, 0);
+
+  let historyHTML = '';
+  allHistory.forEach(h => {
+    let color = h.type == 'Saving'? '#28a745' : h.type == 'Loan'? '#dc3545' : '#007bff';
+    historyHTML += `
+      <div class="history-item" style="color:${color}">
+        <span>${h.date} - ${h.type}</span>
+        <span>₱${h.amount}</span>
+      </div>
+    `;
+  });
+
+  document.getElementById('historyList').innerHTML = historyHTML || '<div>No transactions yet</div>';
+  document.getElementById('memberSave').textContent = saveTotal;
+  document.getElementById('memberLoan').textContent = loanTotal - payTotal;
+  document.getElementById('memberBalance').textContent = saveTotal - (loanTotal - payTotal);
+}
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+}
+
+window.onclick = function(e) {
+  if (e.target.id == 'modal') closeModal();
+}
+
+renderMembers();
+</script>
+</body>
+</html>

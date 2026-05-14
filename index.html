@@ -1,15 +1,14 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VELASCO Coop Savings & Loans</title>
+<title>VELASCO COOP SAVINGS AND LOAN</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 * {margin:0; padding:0; box-sizing:border-box; font-family:'Poppins', sans-serif;}
 body {background:#f5f5f5; padding:16px;}
-h2 {color:#333; margin-bottom:12px;}
+h2 {color:#333; margin-bottom:12px; text-align:center;}
 .card {
   background:white;
   padding:14px;
@@ -94,7 +93,7 @@ input {
 </head>
 <body>
 
-<h2>🏦 Coop Savings & Loans</h2>
+<h2>🏦 VELASCO COOP SAVINGS AND LOAN</h2>
 
 <div class="card total-box">
   Net Funds: ₱<span id="grandTotal">0</span><br>
@@ -150,11 +149,11 @@ input {
 let currentMember = '';
 
 function loadData() {
-  return JSON.parse(localStorage.getItem('coopData') || '{"members":{}}');
+  return JSON.parse(localStorage.getItem('velascoCoopData') || '{"members":{}}');
 }
 
 function saveData(data) {
-  localStorage.setItem('coopData', JSON.stringify(data));
+  localStorage.setItem('velascoCoopData', JSON.stringify(data));
 }
 
 function addMember() {
@@ -164,7 +163,6 @@ function addMember() {
   let data = loadData();
   let key = name.toLowerCase();
 
-  // Check if exists, ignore case and spaces
   let existingKey = Object.keys(data.members).find(k => k.toLowerCase() === key);
 
   if (existingKey) {
@@ -307,9 +305,9 @@ function renderHistory() {
   let m = data.members[currentMember];
 
   let allHistory = [
-   ...(m.savings || []).map(h => ({...h, type:'Saving'})),
-   ...(m.loans || []).map(h => ({...h, type:'Loan'})),
-   ...(m.payments || []).map(h => ({...h, type:'Payment'}))
+  ...(m.savings || []).map(h => ({...h, type:'Saving'})),
+  ...(m.loans || []).map(h => ({...h, type:'Loan'})),
+  ...(m.payments || []).map(h => ({...h, type:'Payment'}))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   let saveTotal = (m.savings || []).reduce((sum, h) => sum + h.amount, 0);

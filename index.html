@@ -32,12 +32,14 @@ h2 {color:#333; margin-bottom:12px; text-align:center;}
   border-radius:10px;
   cursor:pointer;
   box-shadow:0 2px 5px rgba(0,0,0,0.06);
+  position:relative;
 }
 .member:hover {background:#fff3ef;}
 .member-name {font-weight:600;}
 .member-info {display:flex; justify-content:space-between; margin-top:6px; font-size:13px;}
 .savings {color:#28a745; font-weight:700;}
 .loan {color:#dc3545; font-weight:700;}
+.btn-group {display:flex; gap:8px;}
 button {
   background:#ff6b35;
   color:white;
@@ -52,6 +54,10 @@ button {
 .btn-save {background:#28a745;}
 .btn-loan {background:#dc3545;}
 .btn-pay {background:#007bff;}
+.btn-logout {background:#6c757d;}
+.btn-delete {background:#dc3545; width:auto; padding:6px 10px; position:absolute; top:8px; right:8px;}
+.btn-export {background:#17a2b8;}
+.btn-change {background:#ffc107; color:#333;}
 input {
   width:100%;
   padding:10px;
@@ -89,31 +95,89 @@ input {
 .tab button {background:#ddd; color:#333;}
 .tab button.active {background:#ff6b35; color:white;}
 .empty {text-align:center; color:#999; padding:20px;}
+.locked {
+  text-align:center;
+  padding:40px 20px;
+}
+.hidden {display:none!important;}
+.admin-badge {
+  background:#28a745;
+  color:white;
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+  float:right;
+}
+.member-badge {
+  background:#007bff;
+  color:white;
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+  float:right;
+}
+.readonly {
+  background:#f8f9fa;
+  padding:10px;
+  border-radius:8px;
+  text-align:center;
+  color:#666;
+  font-size:13px;
+}
 </style>
 </head>
 <body>
 
-<h2>🏦 VELASCO COOP SAVINGS AND LOAN</h2>
-
-<div class="card total-box">
-  Net Funds: ₱<span id="grandTotal">0</span><br>
-  <small>Savings - Loans</small>
+<div id="loginScreen" class="locked">
+  <h2>🏦 VELASCO COOP SAVINGS AND LOAN</h2>
+  <div class="card">
+    <h3>Login</h3>
+    <input type="text" id="username" placeholder="Enter name or 'admin'">
+    <input type="password" id="password" placeholder="Enter password">
+    <button onclick="login()">Login</button>
+    <p style="font-size:12px; color:#999; margin-top:10px;">
+      Admin: password <strong>velasco123</strong><br>
+      Member: use your name as password
+    </p>
+  </div>
 </div>
 
-<div class="card">
-  <h3>Add Member</h3>
-  <input type="text" id="newMember" placeholder="Enter member name">
-  <button onclick="addMember()">Add Member</button>
-</div>
+<div id="mainApp" class="hidden">
+  <h2>🏦 VELASCO COOP SAVINGS AND LOAN <span id="userBadge"></span></h2>
+  <div class="btn-group" id="adminButtons">
+    <button class="btn-export" onclick="exportData()">Export/Share</button>
+    <button class="btn-change" onclick="showChangePass()">Change Pass</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
 
-<div class="member-list" id="memberList"></div>
+  <div class="btn-group hidden" id="memberButtons">
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="card total-box" id="totalBox">
+    Net Funds: ₱<span id="grandTotal">0</span><br>
+    <small>Savings - Loans</small>
+  </div>
+
+  <div class="card" id="addMemberCard">
+    <h3>Add Member</h3>
+    <input type="text" id="newMember" placeholder="Enter member name">
+    <button onclick="addMember()">Add Member</button>
+  </div>
+
+  <div class="search-box" id="searchBox">
+    <input type="text" id="searchMember" placeholder="Search member..." oninput="renderMembers()">
+  </div>
+
+  <div class="member-list" id="memberList"></div>
+</div>
 
 <div class="modal" id="modal">
   <div class="modal-content">
     <span class="close" onclick="closeModal()">×</span>
     <h3 id="modalName"></h3>
 
-    <div class="tab">
+    <div id="adminTabs" class="tab">
       <button id="tabSave" class="active" onclick="switchTab('save')">Hulog</button>
       <button id="tabLoan" onclick="switchTab('loan')">Utang</button>
       <button id="tabPay" onclick="switchTab('pay')">Bayad</button>
@@ -134,6 +198,10 @@ input {
       <button class="btn-pay" onclick="addPayment()">Pay Loan</button>
     </div>
 
+    <div id="readonlyMsg" class="readonly hidden">
+      Read-only mode. Contact admin to update your record.
+    </div>
+
     <h4 style="margin-top:12px;">History</h4>
     <div id="historyList"></div>
 
@@ -145,8 +213,76 @@ input {
   </div>
 </div>
 
+<div class="modal" id="passModal">
+  <div class="modal-content">
+    <span class="close" onclick="closePassModal()">×</span>
+    <h3>Change Password</h3>
+    <input type="password" id="oldPass" placeholder="Old password">
+    <input type="password" id="newPass" placeholder="New password">
+    <input type="password" id="confirmPass" placeholder="Confirm password">
+    <button onclick="changePassword()">Update Password</button>
+  </div>
+</div>
+
 <script>
 let currentMember = '';
+let currentUser = '';
+let userRole = ''; // 'admin' or 'member'
+let ADMIN_PASSWORD = localStorage.getItem('velascoPass') || 'velasco123';
+
+function checkLogin() {
+  let user = sessionStorage.getItem('velascoUser');
+  let role = sessionStorage.getItem('velascoRole');
+  if (user && role) {
+    currentUser = user;
+    userRole = role;
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('mainApp').classList.remove('hidden');
+
+    if (role === 'admin') {
+      document.getElementById('userBadge').innerHTML = '<span class="admin-badge">ADMIN</span>';
+      document.getElementById('adminButtons').classList.remove('hidden');
+      document.getElementById('memberButtons').classList.add('hidden');
+    } else {
+      document.getElementById('userBadge').innerHTML = '<span class="member-badge">MEMBER</span>';
+      document.getElementById('adminButtons').classList.add('hidden');
+      document.getElementById('memberButtons').classList.remove('hidden');
+      document.getElementById('addMemberCard').classList.add('hidden');
+      document.getElementById('searchBox').classList.add('hidden');
+      document.getElementById('totalBox').classList.add('hidden');
+      openMember(user);
+    }
+    renderMembers();
+  }
+}
+
+function login() {
+  let username = document.getElementById('username').value.trim();
+  let password = document.getElementById('password').value;
+
+  if (!username ||!password) return alert('Enter username and password!');
+
+  if (username.toLowerCase() === 'admin' && password === ADMIN_PASSWORD) {
+    sessionStorage.setItem('velascoUser', 'admin');
+    sessionStorage.setItem('velascoRole', 'admin');
+    checkLogin();
+  } else {
+    let data = loadData();
+    if (data.members[username] && password === username) {
+      sessionStorage.setItem('velascoUser', username);
+      sessionStorage.setItem('velascoRole', 'member');
+      checkLogin();
+    } else {
+      alert('Invalid credentials!');
+    }
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('velascoUser');
+  sessionStorage.removeItem('velascoRole');
+  location.reload();
+}
 
 function loadData() {
   return JSON.parse(localStorage.getItem('velascoCoopData') || '{"members":{}}');
@@ -157,17 +293,17 @@ function saveData(data) {
 }
 
 function addMember() {
+  if (userRole!== 'admin') return;
+
   let name = document.getElementById('newMember').value.trim();
   if (!name) return alert('Enter name!');
 
   let data = loadData();
   let key = name.toLowerCase();
-
   let existingKey = Object.keys(data.members).find(k => k.toLowerCase() === key);
 
   if (existingKey) {
-    alert('Member already exists! Opening ' + existingKey);
-    openMember(existingKey);
+    alert('Member already exists!');
     return;
   }
 
@@ -175,20 +311,29 @@ function addMember() {
   saveData(data);
   document.getElementById('newMember').value = '';
   renderMembers();
-  openMember(name);
+}
+
+function deleteMember(name) {
+  if (userRole!== 'admin') return;
+  if (!confirm('Delete member ' + name + '? All data will be lost!')) return;
+  let data = loadData();
+  delete data.members[name];
+  saveData(data);
+  renderMembers();
 }
 
 function renderMembers() {
   let data = loadData();
   let list = document.getElementById('memberList');
+  let search = document.getElementById('searchMember')?.value.toLowerCase() || '';
   list.innerHTML = '';
   let netTotal = 0;
 
-  let memberNames = Object.keys(data.members);
+  let memberNames = Object.keys(data.members).filter(n => n.toLowerCase().includes(search));
 
   if (memberNames.length === 0) {
-    list.innerHTML = '<div class="empty">No members yet. Add one above!</div>';
-    document.getElementById('grandTotal').textContent = 0;
+    list.innerHTML = '<div class="empty">No members found</div>';
+    if (document.getElementById('grandTotal')) document.getElementById('grandTotal').textContent = 0;
     return;
   }
 
@@ -200,8 +345,13 @@ function renderMembers() {
     let balance = saveTotal - (loanTotal - payTotal);
     netTotal += balance;
 
+    let deleteBtn = userRole === 'admin'
+     ? `<button class="btn-delete" onclick="event.stopPropagation(); deleteMember('${name}')">×</button>`
+      : '';
+
     list.innerHTML += `
       <div class="member" onclick="openMember('${name}')">
+        ${deleteBtn}
         <div class="member-name">${name}</div>
         <div class="member-info">
           <span class="savings">Save: ₱${saveTotal}</span>
@@ -212,18 +362,35 @@ function renderMembers() {
     `;
   }
 
-  document.getElementById('grandTotal').textContent = netTotal;
+  if (document.getElementById('grandTotal')) {
+    document.getElementById('grandTotal').textContent = netTotal;
+  }
 }
 
 function openMember(name) {
+  if (userRole === 'member' && name!== currentUser) return;
+
   currentMember = name;
   document.getElementById('modalName').textContent = name;
   document.getElementById('modal').style.display = 'flex';
-  switchTab('save');
+
+  if (userRole === 'admin') {
+    document.getElementById('adminTabs').classList.remove('hidden');
+    document.getElementById('saveTab').classList.remove('hidden');
+    document.getElementById('readonlyMsg').classList.add('hidden');
+  } else {
+    document.getElementById('adminTabs').classList.add('hidden');
+    document.getElementById('saveTab').classList.add('hidden');
+    document.getElementById('loanTab').classList.add('hidden');
+    document.getElementById('payTab').classList.add('hidden');
+    document.getElementById('readonlyMsg').classList.remove('hidden');
+  }
+
   renderHistory();
 }
 
 function switchTab(tab) {
+  if (userRole!== 'admin') return;
   document.getElementById('tabSave').classList.remove('active');
   document.getElementById('tabLoan').classList.remove('active');
   document.getElementById('tabPay').classList.remove('active');
@@ -231,30 +398,17 @@ function switchTab(tab) {
   document.getElementById('loanTab').style.display = 'none';
   document.getElementById('payTab').style.display = 'none';
 
-  if (tab == 'save') {
-    document.getElementById('tabSave').classList.add('active');
-    document.getElementById('saveTab').style.display = 'block';
-  }
-  if (tab == 'loan') {
-    document.getElementById('tabLoan').classList.add('active');
-    document.getElementById('loanTab').style.display = 'block';
-  }
-  if (tab == 'pay') {
-    document.getElementById('tabPay').classList.add('active');
-    document.getElementById('payTab').style.display = 'block';
-  }
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  document.getElementById(tab + 'Tab').style.display = 'block';
 }
 
 function addSaving() {
+  if (userRole!== 'admin') return;
   let amount = parseFloat(document.getElementById('saveAmount').value);
   if (!amount || amount <= 0) return alert('Enter valid amount!');
 
   let data = loadData();
-  data.members[currentMember].savings.push({
-    amount: amount,
-    date: new Date().toLocaleString()
-  });
-
+  data.members[currentMember].savings.push({amount, date: new Date().toLocaleString()});
   saveData(data);
   document.getElementById('saveAmount').value = '';
   renderHistory();
@@ -262,15 +416,12 @@ function addSaving() {
 }
 
 function addLoan() {
+  if (userRole!== 'admin') return;
   let amount = parseFloat(document.getElementById('loanAmount').value);
   if (!amount || amount <= 0) return alert('Enter valid amount!');
 
   let data = loadData();
-  data.members[currentMember].loans.push({
-    amount: amount,
-    date: new Date().toLocaleString()
-  });
-
+  data.members[currentMember].loans.push({amount, date: new Date().toLocaleString()});
   saveData(data);
   document.getElementById('loanAmount').value = '';
   renderHistory();
@@ -278,6 +429,7 @@ function addLoan() {
 }
 
 function addPayment() {
+  if (userRole!== 'admin') return;
   let amount = parseFloat(document.getElementById('payAmount').value);
   if (!amount || amount <= 0) return alert('Enter valid amount!');
 
@@ -289,11 +441,7 @@ function addPayment() {
 
   if (amount > currentLoan) return alert('Payment exceeds loan amount!');
 
-  data.members[currentMember].payments.push({
-    amount: amount,
-    date: new Date().toLocaleString()
-  });
-
+  data.members[currentMember].payments.push({amount, date: new Date().toLocaleString()});
   saveData(data);
   document.getElementById('payAmount').value = '';
   renderHistory();
@@ -305,9 +453,9 @@ function renderHistory() {
   let m = data.members[currentMember];
 
   let allHistory = [
-  ...(m.savings || []).map(h => ({...h, type:'Saving'})),
-  ...(m.loans || []).map(h => ({...h, type:'Loan'})),
-  ...(m.payments || []).map(h => ({...h, type:'Payment'}))
+...(m.savings || []).map(h => ({...h, type:'Saving'})),
+...(m.loans || []).map(h => ({...h, type:'Loan'})),
+...(m.payments || []).map(h => ({...h, type:'Payment'}))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   let saveTotal = (m.savings || []).reduce((sum, h) => sum + h.amount, 0);
@@ -317,12 +465,10 @@ function renderHistory() {
   let historyHTML = '';
   allHistory.forEach(h => {
     let color = h.type == 'Saving'? '#28a745' : h.type == 'Loan'? '#dc3545' : '#007bff';
-    historyHTML += `
-      <div class="history-item" style="color:${color}">
-        <span>${h.date} - ${h.type}</span>
-        <span>₱${h.amount}</span>
-      </div>
-    `;
+    historyHTML += `<div class="history-item" style="color:${color}">
+      <span>${h.date} - ${h.type}</span>
+      <span>₱${h.amount}</span>
+    </div>`;
   });
 
   document.getElementById('historyList').innerHTML = historyHTML || '<div>No transactions yet</div>';
@@ -331,15 +477,66 @@ function renderHistory() {
   document.getElementById('memberBalance').textContent = saveTotal - (loanTotal - payTotal);
 }
 
+function exportData() {
+  if (userRole!== 'admin') return;
+  let data = loadData();
+  let text = 'VELASCO COOP SAVINGS AND LOAN\n';
+  text += 'Generated: ' + new Date().toLocaleString() + '\n\n';
+
+  for (let name in data.members) {
+    let m = data.members[name];
+    let saveTotal = (m.savings || []).reduce((sum, h) => sum + h.amount, 0);
+    let loanTotal = (m.loans || []).reduce((sum, h) => sum + h.amount, 0);
+    let payTotal = (m.payments || []).reduce((sum, h) => sum + h.amount, 0);
+    let balance = saveTotal - (loanTotal - payTotal);
+
+    text += `${name}\n Savings: ₱${saveTotal}\n Loan: ₱${loanTotal - payTotal}\n Balance: ₱${balance}\n\n`;
+  }
+
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Copied to clipboard! Paste mo na sa GC.');
+  }).catch(() => {
+    prompt('Copy this:', text);
+  });
+}
+
+function showChangePass() {
+  if (userRole!== 'admin') return;
+  document.getElementById('passModal').style.display = 'flex';
+}
+
+function closePassModal() {
+  document.getElementById('passModal').style.display = 'none';
+  document.getElementById('oldPass').value = '';
+  document.getElementById('newPass').value = '';
+  document.getElementById('confirmPass').value = '';
+}
+
+function changePassword() {
+  let oldPass = document.getElementById('oldPass').value;
+  let newPass = document.getElementById('newPass').value;
+  let confirmPass = document.getElementById('confirmPass').value;
+
+  if (oldPass!== ADMIN_PASSWORD) return alert('Wrong old password!');
+  if (newPass!== confirmPass) return alert('Passwords do not match!');
+  if (newPass.length < 4) return alert('Password too short!');
+
+  ADMIN_PASSWORD = newPass;
+  localStorage.setItem('velascoPass', newPass);
+  alert('Password changed successfully!');
+  closePassModal();
+}
+
 function closeModal() {
   document.getElementById('modal').style.display = 'none';
 }
 
 window.onclick = function(e) {
   if (e.target.id == 'modal') closeModal();
+  if (e.target.id == 'passModal') closePassModal();
 }
 
-renderMembers();
+checkLogin();
 </script>
 </body>
 </html>
